@@ -131,12 +131,13 @@ void sortPixels() {
 
 int findLastInRow(int start){
   int i = start;
-  while (i++ < img.pixels.length) {
+  while (i < img.pixels.length) {
     if ((i % img.width == 0 && i != start) ||
       brightness(mask.pixels[i]) == 0.0f ||
       i - start == maxSpanLength) {
-      break;
+        break;
     }
+    ++i;
   }
   return i;
 }
