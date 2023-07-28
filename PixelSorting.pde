@@ -34,7 +34,7 @@ void setup() {
 }
 
 void initImages() {
-  img = loadImage("fit.jpg");
+  img = loadImage("gwtpe.jpg");
   
   mask = img.get();
   mask.loadPixels();
