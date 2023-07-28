@@ -104,13 +104,19 @@ void makeMask() {
 
 void sortPixels() {
   for (int i = 0; i < img.pixels.length; i++) {
-    if (brightness(mask.pixels[i]) == 0.0f) continue;
+    if (brightness(mask.pixels[i]) == 0.0f) {
+       sorted.pixels[i] = img.pixels[i];
+       continue;
+    }
     
     int end = -1;
     if (mode == sortingMode.HORIZONTAL)
       end = findLastInRow(i);
     
-    if (end == i) sorted.pixels[i] = img.pixels[i];
+    if (end == i) {
+      sorted.pixels[i] = img.pixels[i];
+      continue;
+    }
     color[] unsorted = new color[end - i];
     for (int j = 0; j < unsorted.length; j++) {
       unsorted[j] = img.pixels[i + j];
@@ -124,12 +130,13 @@ void sortPixels() {
 }
 
 int findLastInRow(int start){
-  for (int i = start; i < img.pixels.length; i++) {
-    if (i % img.width == 0 
-    || brightness(mask.pixels[i]) == 0.0f
-    || i - start == maxSpanLength) {
-      return i;
+  int i = start;
+  while (i++ < img.pixels.length) {
+    if ((i % img.width == 0 && i != start) ||
+      brightness(mask.pixels[i]) == 0.0f ||
+      i - start == maxSpanLength) {
+      break;
     }
   }
-  return start;
+  return i;
 }
