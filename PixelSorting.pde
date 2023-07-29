@@ -14,7 +14,15 @@ enum SortingMode {
   SATURATION
 };
 
-SortingMode mode = SortingMode.BRIGHTNESS;
+SortingMode sortingMode = SortingMode.BRIGHTNESS;
+
+enum MaskingMode {
+  BRIGHTNESS,
+  HUE,
+  SATURATION
+};
+
+MaskingMode maskingMode = MaskingMode.BRIGHTNESS;
 
 int lowerThresh = 50;
 int upperThresh = 150;
@@ -22,7 +30,7 @@ int upperThresh = 150;
 int maxSpanLength = 100;
 
 void setup() {
-  size(925,450);
+  size(935,500);
   cp5 = new ControlP5(this);
  
   initImages(); 
@@ -43,7 +51,7 @@ void initImages() {
 }
 
 void initGUI() {
-  cp5.addRange("maskRange")
+  cp5.addRange("mask_range")
   .setBroadcast(false) 
   .setPosition(10,365)
   .setSize(400,40)
@@ -52,19 +60,19 @@ void initGUI() {
   .setRangeValues(lowerThresh,upperThresh)
   .setBroadcast(true);
    
-  cp5.addSlider("spanLength")
+  cp5.addSlider("span_length")
   .registerProperty("maxSpanLength") 
   .setPosition(500,370)
   .setSize(175,30)
   .setRange(0,img.width)
   .setValue(100);
 
-  initDropdown();
+  initDropdowns();
 }
 
-void initDropdown() {
-  DropdownList list = cp5.addDropdownList("Sorting mode")
-    .setPosition(750, 365)
+void initDropdowns() {
+  DropdownList l1 = cp5.addDropdownList("mask_mode")
+    .setPosition(10, 410)
     .setBackgroundColor(color(190))
     .setItemHeight(20)
     .setBarHeight(15)
@@ -72,27 +80,60 @@ void initDropdown() {
 
   int i = 0;
   for (SortingMode mode : SortingMode.values()) { 
-    list.addItem(mode.name(), i);
+    l1.addItem(mode.name(), i);
+    ++i;
+  }
+  
+  DropdownList l2 = cp5.addDropdownList("sorting_mode")
+    .setPosition(500, 410)
+    .setBackgroundColor(color(190))
+    .setItemHeight(20)
+    .setBarHeight(15)
+    .setColorActive(color(255, 128));
+
+  i = 0;
+  for (SortingMode mode : SortingMode.values()) { 
+    l2.addItem(mode.name(), i);
     ++i;
   }
 }
 
 void controlEvent(ControlEvent ce) {
-  if(ce.isFrom("maskRange")) {
+  if(ce.isFrom("mask_range")) {
     lowerThresh = int(ce.getController().getArrayValue(0));
     upperThresh = int(ce.getController().getArrayValue(1));
   }
+  else if (ce.isFrom("mask_mode")) {
+    maskingMode = MaskingMode.values()[(int)ce.getValue()];
+  }
+  else if (ce.isFrom("sorting_mode")) {
+    sortingMode = SortingMode.values()[(int)ce.getValue()];
+  }
 }
 
-public void spanLength(int val) {
+public void span_length(int val) {
   maxSpanLength = val;
 }
 
 void updateImage() {
-  // makeMask();
-  makeHueMask();
+  makeMask();
   mask.updatePixels();
-  sortPixels();
+  
+  Comparator<SortingColor> c;
+  switch (sortingMode) {
+    case BRIGHTNESS:
+      c = new BrightnessComparator();
+      break;
+    case HUE:
+      c = new HueComparator();
+      break;
+    case SATURATION:
+      c = new SaturationComparator();
+      break;
+    default:
+      c = new BrightnessComparator();
+  }
+  sortPixels(c);
   sorted.updatePixels();
 }
 
@@ -107,6 +148,17 @@ void draw() {
 void makeMask() {
   for (int i = 0; i < img.pixels.length; i++) {
     float b = brightness(img.pixels[i]);
+    switch (maskingMode) {
+      case BRIGHTNESS:
+        b = brightness(img.pixels[i]);
+        break;
+     case HUE:
+        b = hue(img.pixels[i]);
+        break;
+      case SATURATION:
+        b = saturation(img.pixels[i]);
+        break;
+    }
     color fill = color(0,0,0);
     if (b <= upperThresh && b >= lowerThresh) {
       fill = color(255,255,255);
@@ -115,18 +167,7 @@ void makeMask() {
   }
 }
 
-void makeHueMask() {
-    for (int i = 0; i < img.pixels.length; i++) {
-    float h = hue(img.pixels[i]);
-    color fill = color(0,0,0);
-    if (h <= upperThresh && h >= lowerThresh) {
-      fill = color(255,255,255);
-    }
-    mask.pixels[i] = fill;
-  }
-}
-
-void sortPixels() {
+void sortPixels(Comparator<SortingColor> comparator) {
   for (int i = 0; i < img.pixels.length; i++) {
     int end = findLastInRow(i);
     if (end == i) {
@@ -137,7 +178,7 @@ void sortPixels() {
     for (int j = 0; j < span.length; j++) {
       span[j] = new SortingColor(img.pixels[i + j]);
     }
-    Arrays.sort(span, new BrightnessComparator());
+    Arrays.sort(span, comparator);
     for (int j = 0; j < span.length; j++) {
       sorted.pixels[i+j] = span[j].col;
     }
@@ -145,12 +186,13 @@ void sortPixels() {
   }
 }
 
+// returns pixel where span ends (exclusive)
 int findLastInRow(int start){
   int i = start;
   while (i < img.pixels.length) {
     if ((i % img.width == 0 && i != start) ||
       isBlack(mask.pixels[i]) ||
-      i - start == maxSpanLength) {
+      i - start >= maxSpanLength) {
         break;
     }
     ++i;
@@ -164,24 +206,32 @@ boolean isBlack(color pix) {
 
 class SortingColor {
   color col;
-  float brightness;
-  float hue;
+  Float brightness;
+  Float hue;
+  Float saturation;
 
   SortingColor(color c) {
     col = c;
     brightness = brightness(c);
     hue = hue(c);
+    saturation = saturation(c);
   }
 }
 
 class BrightnessComparator implements Comparator<SortingColor> {
   int compare(SortingColor c1, SortingColor c2) {
-    return int(c1.brightness - c2.brightness);
+    return c1.brightness.compareTo(c2.brightness);
   }
 }
 
 class HueComparator implements Comparator<SortingColor> {
   int compare(SortingColor c1, SortingColor c2) {
-    return int(c1.hue - c2.hue);
+    return c1.hue.compareTo(c2.hue);
+  }
+}
+
+class SaturationComparator implements Comparator<SortingColor> {
+  int compare(SortingColor c1, SortingColor c2) {
+    return c1.saturation.compareTo(c2.saturation);
   }
 }
